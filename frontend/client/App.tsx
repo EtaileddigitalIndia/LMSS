@@ -12,6 +12,7 @@ import { AuthProvider } from "@/AuthContext";
 import Index from "./pages/Index";
 import Courses from "./pages/Courses";
 import CourseDetail from "./pages/CourseDetail";
+import CourseBuilder from "./pages/CourseBuilder";
 import LessonViewer from "./pages/LessonViewer";
 import Quiz from "./pages/Quiz";
 import MyLearning from "./pages/MyLearning";
@@ -36,6 +37,8 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/courses" element={<Courses />} />
             <Route path="/course/:id" element={<CourseDetail />} />
+            <Route path="/course-builder" element={<CourseBuilder />} />
+            <Route path="/course-builder/:courseId" element={<CourseBuilder />} />
             <Route path="/lesson/:id" element={<LessonViewer />} />
             <Route path="/quiz/:id" element={<Quiz />} />
             <Route path="/my-learning" element={<MyLearning />} />
