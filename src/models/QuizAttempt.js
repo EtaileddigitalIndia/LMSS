@@ -58,8 +58,8 @@ const quizAttemptSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['completed', 'timeout', 'abandoned'],
-    default: 'completed'
+    enum: ['in_progress', 'completed', 'timeout', 'abandoned'],
+    default: 'in_progress'
   },
   feedback_provided: {
     type: Boolean,

@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { QuizIcon, Plus, Edit, BarChart3, Clock, Users } from 'lucide-react';
 import AppLayout from "@/components/layout/AppLayout";
+import QuizBuilder from "@/components/quiz/QuizBuilder";
 
 interface Course {
   _id: string;
@@ -18,6 +22,21 @@ interface Lesson {
   order: number;
   duration: number;
   attachments?: UploadedFile[];
+  quiz?: string; // Quiz ID if quiz exists
+}
+
+interface Quiz {
+  _id: string;
+  title: string;
+  description: string;
+  lesson_id: string;
+  questions: any[];
+  passing_score: number;
+  time_limit?: number;
+  max_attempts: number;
+  is_active: boolean;
+  shuffle_questions: boolean;
+  show_results: boolean;
 }
 
 interface UploadedFile {
@@ -41,6 +60,12 @@ const ManageLessons = () => {
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [loadingLessons, setLoadingLessons] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Quiz related states
+  const [showQuizBuilder, setShowQuizBuilder] = useState(false);
+  const [selectedLessonForQuiz, setSelectedLessonForQuiz] = useState<string>("");
+  const [lessonQuizzes, setLessonQuizzes] = useState<{[key: string]: Quiz}>({});
+  const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
 
   const token = localStorage.getItem("token");
 
@@ -204,9 +229,83 @@ const ManageLessons = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       await fetchLessons(selectedCourseId);
+      // Clear quiz data for deleted lesson
+      setLessonQuizzes(prev => {
+        const newQuizzes = { ...prev };
+        delete newQuizzes[lessonId];
+        return newQuizzes;
+      });
     } catch (err) {
       alert("Error deleting lesson");
     }
+  };
+
+  // Quiz management functions
+  const fetchQuizForLesson = async (lessonId: string) => {
+    try {
+      const res = await axios.get(`http://localhost:3001/api/quizzes/lesson/${lessonId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.data.success) {
+        setLessonQuizzes(prev => ({ ...prev, [lessonId]: res.data.data }));
+      }
+    } catch (err: any) {
+      // Quiz doesn't exist for this lesson, which is fine
+      if (err.response?.status !== 404) {
+        console.error("Error fetching quiz:", err);
+      }
+    }
+  };
+
+  const handleCreateQuiz = (lessonId: string) => {
+    setSelectedLessonForQuiz(lessonId);
+    setEditingQuiz(null);
+    setShowQuizBuilder(true);
+  };
+
+  const handleEditQuiz = (lessonId: string) => {
+    const quiz = lessonQuizzes[lessonId];
+    if (quiz) {
+      setSelectedLessonForQuiz(lessonId);
+      setEditingQuiz(quiz);
+      setShowQuizBuilder(true);
+    }
+  };
+
+  const handleDeleteQuiz = async (quizId: string, lessonId: string) => {
+    if (!confirm("Are you sure you want to delete this quiz?")) return;
+    try {
+      await axios.delete(`http://localhost:3001/api/quizzes/${quizId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setLessonQuizzes(prev => {
+        const newQuizzes = { ...prev };
+        delete newQuizzes[lessonId];
+        return newQuizzes;
+      });
+      alert("Quiz deleted successfully");
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Error deleting quiz");
+    }
+  };
+
+  const handleQuizSaved = async () => {
+    setShowQuizBuilder(false);
+    setSelectedLessonForQuiz("");
+    setEditingQuiz(null);
+    
+    // Refresh quiz data for the lesson
+    if (selectedLessonForQuiz) {
+      await fetchQuizForLesson(selectedLessonForQuiz);
+    }
+    
+    alert("Quiz saved successfully!");
+  };
+
+  const handleQuizBuilderCancel = () => {
+    setShowQuizBuilder(false);
+    setSelectedLessonForQuiz("");
+    setEditingQuiz(null);
   };
 
   useEffect(() => {
@@ -214,8 +313,19 @@ const ManageLessons = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedCourseId) fetchLessons(selectedCourseId);
+    if (selectedCourseId) {
+      fetchLessons(selectedCourseId);
+    }
   }, [selectedCourseId]);
+
+  // Fetch quizzes for lessons when lessons are loaded
+  useEffect(() => {
+    if (lessons.length > 0) {
+      lessons.forEach(lesson => {
+        fetchQuizForLesson(lesson._id);
+      });
+    }
+  }, [lessons]);
 
   useEffect(() => {
     if (editingLesson) {
@@ -358,61 +468,169 @@ const ManageLessons = () => {
               ) : lessons.length === 0 ? (
                 <p>No lessons added yet.</p>
               ) : (
-                lessons.map((lesson) => (
-                  <Card key={lesson._id}>
-                    <CardContent className="py-4 space-y-2">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="font-semibold">{lesson.title}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            Order: {lesson.order}, Duration: {lesson.duration}{" "}
-                            mins
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => setEditingLesson(lesson)}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            onClick={() => handleDeleteLesson(lesson._id)}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-
-                      {lesson.attachments?.map((att, i) => {
-                        const fileUrl = `http://localhost:3001${att.url}`;
-                        return (
-                          <div key={i} className="text-sm mt-1">
-                            {att.type.startsWith("video/") ? (
-                              <video controls className="w-full max-w-md">
-                                <source src={fileUrl} type={att.type} />
-                                Your browser does not support the video tag.
-                              </video>
-                            ) : (
-                              <a
-                                className="text-blue-600 underline"
-                                href={fileUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                {att.filename}
-                              </a>
-                            )}
+                lessons.map((lesson) => {
+                  const lessonQuiz = lessonQuizzes[lesson._id];
+                  
+                  return (
+                    <Card key={lesson._id}>
+                      <CardContent className="py-4 space-y-4">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h3 className="font-semibold">{lesson.title}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              Order: {lesson.order}, Duration: {lesson.duration} mins
+                            </p>
                           </div>
-                        );
-                      })}
-                    </CardContent>
-                  </Card>
-                ))
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEditingLesson(lesson)}
+                            >
+                              <Edit className="h-4 w-4 mr-1" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeleteLesson(lesson._id)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Lesson Attachments */}
+                        {lesson.attachments?.map((att, i) => {
+                          const fileUrl = `http://localhost:3001${att.url}`;
+                          return (
+                            <div key={i} className="text-sm">
+                              {att.type.startsWith("video/") ? (
+                                <video controls className="w-full max-w-md">
+                                  <source src={fileUrl} type={att.type} />
+                                  Your browser does not support the video tag.
+                                </video>
+                              ) : (
+                                <a
+                                  className="text-blue-600 underline"
+                                  href={fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {att.filename}
+                                </a>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        <Separator />
+
+                        {/* Quiz Section */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium flex items-center gap-2">
+                              <QuizIcon className="h-4 w-4" />
+                              Quiz Assessment
+                            </h4>
+                          </div>
+                          
+                          {lessonQuiz ? (
+                            <div className="bg-muted p-4 rounded-lg space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h5 className="font-medium">{lessonQuiz.title}</h5>
+                                  {lessonQuiz.description && (
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                      {lessonQuiz.description}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant={lessonQuiz.is_active ? "default" : "secondary"}>
+                                    {lessonQuiz.is_active ? "Active" : "Inactive"}
+                                  </Badge>
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div className="flex items-center gap-1">
+                                  <BarChart3 className="h-4 w-4" />
+                                  {lessonQuiz.questions.length} Questions
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Users className="h-4 w-4" />
+                                  {lessonQuiz.passing_score}% Pass
+                                </div>
+                                {lessonQuiz.time_limit && (
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-4 w-4" />
+                                    {lessonQuiz.time_limit}min
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-1">
+                                  <Users className="h-4 w-4" />
+                                  {lessonQuiz.max_attempts} Attempts
+                                </div>
+                              </div>
+
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleEditQuiz(lesson._id)}
+                                >
+                                  <Edit className="h-4 w-4 mr-1" />
+                                  Edit Quiz
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleDeleteQuiz(lessonQuiz._id, lesson._id)}
+                                >
+                                  Delete Quiz
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-6 bg-muted/50 rounded-lg border-2 border-dashed">
+                              <QuizIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                              <p className="text-sm text-muted-foreground mb-3">
+                                No quiz created for this lesson yet
+                              </p>
+                              <Button
+                                size="sm"
+                                onClick={() => handleCreateQuiz(lesson._id)}
+                              >
+                                <Plus className="h-4 w-4 mr-1" />
+                                Create Quiz
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
               )}
             </div>
           </>
+        )}
+
+        {/* Quiz Builder Modal */}
+        {showQuizBuilder && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-background rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <QuizBuilder
+                  lessonId={selectedLessonForQuiz}
+                  existingQuiz={editingQuiz}
+                  onSave={handleQuizSaved}
+                  onCancel={handleQuizBuilderCancel}
+                />
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </AppLayout>
