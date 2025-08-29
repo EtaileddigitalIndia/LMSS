@@ -1,7 +1,7 @@
 Live Website: 
 https://eduflowstudentportal.netlify.app/
 
-### Global LMS + Student Portal
+### Global LMS & Student Portal
 
 Modern full‑stack Learning Management System monorepo featuring a Node.js/Express + MongoDB backend and a Vite/React TypeScript frontend. Includes authentication, courses, lessons, quizzes, enrollments, certificates, notifications, analytics, file uploads (local/S3), and production‑ready deployment to Netlify/Render.
 
