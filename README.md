@@ -86,8 +86,7 @@ FRONTEND_URL=http://localhost:8080
 
 # MongoDB
 MONGODB_URI=mongodb://localhost:27017/global_lms
-MONGODB_URI_PROD=mongodb+srv://user:pass@cluster.mongodb.net/global_lms
-
+MONGODB_URI_PROD=
 # Auth
 JWT_SECRET=change_me
 JWT_EXPIRES_IN=7d
