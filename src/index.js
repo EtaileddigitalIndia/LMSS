@@ -24,6 +24,15 @@ const notificationRoutes = require("./routes/notifications");
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// ✅ Validate required environment variables
+const requiredEnvVars = ['JWT_SECRET', 'MONGODB_URI'];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:', missingEnvVars.join(', '));
+  process.exit(1);
+}
+
 // ✅ Connect to MongoDB
 connectDB();
 
@@ -62,12 +71,13 @@ console.log("🔧 CORS Configuration:", {
   NODE_ENV: process.env.NODE_ENV,
 });
 
-// Log all environment variables for debugging
+// Log environment variables for debugging (without sensitive data)
 console.log("🔧 Environment Variables:", {
   NODE_ENV: process.env.NODE_ENV,
   PORT: process.env.PORT,
   FRONTEND_URL: process.env.FRONTEND_URL,
   MONGODB_URI_PROD: process.env.MONGODB_URI_PROD ? "Set" : "Not set",
+  JWT_SECRET: process.env.JWT_SECRET ? "Set" : "Not set",
   AWS_REGION: process.env.AWS_REGION ? "Set" : "Not set",
   S3_BUCKET: process.env.S3_BUCKET_NAME ? "Set" : "Not set",
 });
@@ -75,23 +85,31 @@ console.log("🔧 Environment Variables:", {
 app.use(
   cors({
     origin: function (origin, callback) {
-      console.log("🌐 CORS Request from:", origin);
+      if (process.env.NODE_ENV === 'development') {
+        console.log("🌐 CORS Request from:", origin);
+      }
 
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) {
-        console.log("✅ Allowing request with no origin");
+        if (process.env.NODE_ENV === 'development') {
+          console.log("✅ Allowing request with no origin");
+        }
         return callback(null, true);
       }
 
       // Check if origin is in allowed list
       if (allowedOrigins.includes(origin)) {
-        console.log("✅ Allowing request from:", origin);
+        if (process.env.NODE_ENV === 'development') {
+          console.log("✅ Allowing request from:", origin);
+        }
         return callback(null, true);
       }
 
       // Block the request
-      console.log("❌ CORS Blocked:", origin);
-      console.log("❌ Allowed origins:", allowedOrigins);
+      if (process.env.NODE_ENV === 'development') {
+        console.log("❌ CORS Blocked:", origin);
+        console.log("❌ Allowed origins:", allowedOrigins);
+      }
       return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
@@ -105,6 +123,8 @@ const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
   message: "Too many requests from this IP, please try again later.",
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use(limiter);
 
@@ -153,6 +173,7 @@ app.get("/health", (req, res) => {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
     database: "MongoDB",
+    auth: process.env.JWT_SECRET ? "Configured" : "Not configured",
   });
 });
 
@@ -175,6 +196,23 @@ app.use("/api/notifications", notificationRoutes);
 // ✅ Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
+  
+  // Handle specific error types
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation error',
+      errors: Object.values(err.errors).map(e => e.message)
+    });
+  }
+  
+  if (err.code === 11000) {
+    return res.status(409).json({
+      success: false,
+      message: 'Duplicate entry error'
+    });
+  }
+  
   res.status(500).json({
     success: false,
     message: "Something went wrong!",
@@ -199,4 +237,5 @@ app.listen(PORT, () => {
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
   console.log(`🗄️  Database: MongoDB`);
+  console.log(`🔐 JWT Secret: ${process.env.JWT_SECRET ? 'Configured' : 'Not configured'}`);
 });

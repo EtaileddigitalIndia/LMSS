@@ -19,6 +19,7 @@ export default function Profile() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedData, setEditedData] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [isLoading, setIsLoading] = useState(false);
 
   const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [certificateCourses, setCertificateCourses] = useState<any[]>([]);
@@ -42,6 +43,17 @@ export default function Profile() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate file type and size
+    if (!file.type.startsWith('image/')) {
+      toast.error("Please select an image file");
+      return;
+    }
+    
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      toast.error("Image must be smaller than 5MB");
+      return;
+    }
+
     // Store the actual file for upload
     setEditedData((prev: any) => ({
       ...prev,
@@ -60,7 +72,15 @@ export default function Profile() {
       return;
     }
 
+    // Validate new password strength
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(passwordData.new_password)) {
+      setPasswordError("New password must contain at least one uppercase letter, one lowercase letter, and one number");
+      return;
+    }
+
     try {
+      setIsLoading(true);
       const token = localStorage.getItem("token");
       const res = await fetch(URLS.API.AUTH.CHANGE_PASSWORD, {
         method: "PUT",
@@ -83,14 +103,19 @@ export default function Profile() {
         new_password: "",
         confirm_password: "",
       });
+      toast.success("Password updated successfully!");
     } catch (err: any) {
       setPasswordError(err.message);
+      toast.error(`Failed to change password: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleSave = async () => {
     setProfileMessage("");
     try {
+      setIsLoading(true);
       const token = localStorage.getItem("token");
 
       // Create FormData for file upload
@@ -107,7 +132,6 @@ export default function Profile() {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
-          // Don't set Content-Type for FormData - browser will set it with boundary
         },
         body: formData,
       });
@@ -118,21 +142,25 @@ export default function Profile() {
       // Update local user data with the response
       if (data.data) {
         localStorage.setItem("user", JSON.stringify(data.data));
-        // Update the auth context without reloading
         window.dispatchEvent(new Event("storage"));
       }
 
       setIsEditing(false);
       setProfileMessage("Profile updated successfully!");
+      toast.success("Profile updated successfully!");
     } catch (error: any) {
       console.error("Profile update error:", error);
       setProfileMessage(error.message || "Failed to update profile");
+      toast.error(`Failed to update profile: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleCancel = () => {
     setEditedData(user);
     setIsEditing(false);
+    setProfileMessage("");
   };
 
   useEffect(() => {
@@ -222,6 +250,7 @@ export default function Profile() {
                         size="sm"
                         className="absolute -bottom-2 -right-2 rounded-full p-2"
                         onClick={handleAvatarButtonClick}
+                        disabled={isLoading}
                       >
                         <Camera className="h-4 w-4" />
                       </Button>
@@ -238,10 +267,6 @@ export default function Profile() {
                   </div>
                   <p className="text-muted-foreground">{editedData.email}</p>
                   <div className="flex space-x-4 text-sm text-muted-foreground">
-                    {/* <div className="flex items-center space-x-1">
-                      <MapPin className="h-4 w-4" />
-                      <span>{editedData.location || "Unknown"}</span>
-                    </div> */}
                     <div className="flex items-center space-x-1">
                       <Calendar className="h-4 w-4" />
                       <span>
@@ -256,6 +281,7 @@ export default function Profile() {
                 onClick={() =>
                   isEditing ? handleCancel() : setIsEditing(true)
                 }
+                disabled={isLoading}
               >
                 {isEditing ? (
                   <>
@@ -268,6 +294,11 @@ export default function Profile() {
                 )}
               </Button>
             </div>
+            {profileMessage && (
+              <div className={`mt-4 p-3 rounded ${profileMessage.includes('successfully') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                {profileMessage}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -306,15 +337,20 @@ export default function Profile() {
                           },
                         })
                       }
+                      disabled={isLoading}
                     />
-                    <Button onClick={handleSave}>
+                    <Button onClick={handleSave} disabled={isLoading} className="mt-4">
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
                       <Save className="mr-2 h-4 w-4" /> Save Changes
+                        </>
+                      )}
                     </Button>
-                    {profileMessage && (
-                      <p className="text-sm text-muted-foreground">
-                        {profileMessage}
-                      </p>
-                    )}
                   </>
                 ) : (
                   <p className="text-muted-foreground">
@@ -441,6 +477,7 @@ export default function Profile() {
                     setEditedData({ ...editedData, full_name: e.target.value })
                   }
                   readOnly={!isEditing}
+                  disabled={isLoading}
                 />
                 <Label>Email</Label>
                 <Input value={editedData.email} readOnly />
@@ -467,6 +504,7 @@ export default function Profile() {
                       current_password: e.target.value,
                     })
                   }
+                  disabled={isLoading}
                 />
                 <Label>New Password</Label>
                 <Input
@@ -478,6 +516,7 @@ export default function Profile() {
                       new_password: e.target.value,
                     })
                   }
+                  disabled={isLoading}
                 />
                 <Label>Confirm Password</Label>
                 <Input
@@ -489,6 +528,7 @@ export default function Profile() {
                       confirm_password: e.target.value,
                     })
                   }
+                  disabled={isLoading}
                 />
                 {passwordError && (
                   <p className="text-red-500 text-sm">{passwordError}</p>
@@ -496,7 +536,16 @@ export default function Profile() {
                 {passwordSuccess && (
                   <p className="text-green-600 text-sm">{passwordSuccess}</p>
                 )}
-                <Button onClick={handlePasswordChange}>Update Password</Button>
+                <Button onClick={handlePasswordChange} disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    "Update Password"
+                  )}
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>

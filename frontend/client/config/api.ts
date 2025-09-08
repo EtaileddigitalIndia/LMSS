@@ -59,6 +59,7 @@ export const API_ENDPOINTS = {
     DETAIL: (id: string) => `/api/users/${id}`,
     UPDATE: (id: string) => `/api/users/${id}`,
     DELETE: (id: string) => `/api/users/${id}`,
+    PROFILE: "/api/users/profile",
   },
 
   // Certificates
@@ -81,6 +82,7 @@ export const API_ENDPOINTS = {
     LIST: "/api/notifications",
     MARK_READ: (id: string) => `/api/notifications/${id}/read`,
     MARK_ALL_READ: "/api/notifications/mark-all-read",
+    DELETE: (id: string) => `/api/notifications/${id}`,
   },
 
   // Affiliations
@@ -112,7 +114,7 @@ export const API_ENDPOINTS = {
 
 // API Request Configuration
 export const API_CONFIG = {
-  TIMEOUT: 30000, // 30 seconds
+  TIMEOUT: parseInt(import.meta.env.VITE_API_TIMEOUT || "30000"),
   RETRY_ATTEMPTS: 3,
   RETRY_DELAY: 1000, // 1 second
 };
@@ -121,6 +123,7 @@ export const API_CONFIG = {
 export const getAuthHeaders = (token?: string) => {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "Accept": "application/json",
   };
 
   if (token) {
@@ -136,6 +139,7 @@ export interface ApiResponse<T = any> {
   message?: string;
   data?: T;
   error?: string;
+  errors?: string[];
 }
 
 export interface PaginatedResponse<T> extends ApiResponse<T[]> {
