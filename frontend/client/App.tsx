@@ -22,8 +22,8 @@ import Certificate from "./pages/Certificate";
 import InstructorDashboard from "./pages/InstructorDashboard";
 import ManageLessons from "./pages/ManageLessons";
 import AdminDashboard from "./pages/AdminDashboard";
-import Affiliations from "./pages/Affiliations"; // ✅ NEW
-import Franchise from "./pages/Franchise"; // ✅ NEW
+import Affiliations from "./pages/Affiliations";
+import Franchise from "./pages/Franchise";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
@@ -37,7 +37,20 @@ import Contact from "./pages/Contact";
 import Community from "./pages/Community";
 import NotificationPanel from "./pages/NotificationPanel";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error: any) => {
+        // Don't retry on authentication errors
+        if (error?.message === 'Authentication required') {
+          return false;
+        }
+        return failureCount < 3;
+      },
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -61,12 +74,10 @@ const App = () => (
             />
             <Route path="/lessons" element={<ManageLessons />} />
             <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/affiliations" element={<Affiliations />} />{" "}
-            {/* ✅ New */}
-            <Route path="/franchise" element={<Franchise />} /> {/* ✅ New */}
+            <Route path="/affiliations" element={<Affiliations />} />
+            <Route path="/franchise" element={<Franchise />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="*" element={<NotFound />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/cookies" element={<CookiePolicy />} />
@@ -76,6 +87,7 @@ const App = () => (
             <Route path="/contact" element={<Contact />} />
             <Route path="/community" element={<Community />} />
             <Route path="/notifications" element={<NotificationPanel />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

@@ -11,8 +11,14 @@ const authenticateToken = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Access token required' });
     }
 
+    // Verify JWT secret exists
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET not configured');
+      return res.status(500).json({ success: false, message: 'Authentication configuration error' });
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.user_id);
+    const user = await User.findById(decoded.user_id).select('-password');
 
     if (!user || !user.is_active) {
       return res.status(403).json({ success: false, message: 'Invalid or deactivated user' });
@@ -25,10 +31,14 @@ const authenticateToken = async (req, res, next) => {
       role: user.role,
       full_name: user.full_name,
       is_active: user.is_active,
+      avatar_url: user.avatar_url,
+      profile: user.profile
     };
 
     next();
   } catch (error) {
+    console.error('Authentication error:', error);
+    
     const message =
       error.name === 'TokenExpiredError'
         ? 'Token expired'
@@ -44,7 +54,10 @@ const authenticateToken = async (req, res, next) => {
 const authorizeRoles = (...roles) => {
   return (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+      return res.status(403).json({ 
+        success: false, 
+        message: `Access denied. Required roles: ${roles.join(', ')}. Your role: ${req.user?.role || 'none'}` 
+      });
     }
     next();
   };
