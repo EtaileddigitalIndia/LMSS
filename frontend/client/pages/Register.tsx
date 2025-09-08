@@ -5,7 +5,6 @@ import { URLS } from '@/config/urls';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -13,9 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GraduationCap, Eye, EyeOff, CheckCircle, XCircle } from "lucide-react";
+import { GraduationCap } from "lucide-react";
 import { useAuth } from "@/AuthContext";
-import { toast } from "sonner";
+import { toast } from "sonner"; // ✅ Add this
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -25,104 +24,33 @@ export default function Register() {
     confirmPassword: "",
     role: "student",
   });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
-  const [passwordStrength, setPasswordStrength] = useState({
-    hasMinLength: false,
-    hasUppercase: false,
-    hasLowercase: false,
-    hasNumber: false,
-    isValid: false
-  });
   const navigate = useNavigate();
 
   const { login } = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { id, value } = e.target;
-    setFormData({ ...formData, [id]: value });
-    
-    // Clear validation errors when user starts typing
-    if (validationErrors[id]) {
-      setValidationErrors(prev => ({ ...prev, [id]: '' }));
-    }
-    if (errorMsg) setErrorMsg("");
-    
-    // Check password strength in real-time
-    if (id === 'password') {
-      checkPasswordStrength(value);
-    }
-  };
-
-  const checkPasswordStrength = (password: string) => {
-    const strength = {
-      hasMinLength: password.length >= 8,
-      hasUppercase: /[A-Z]/.test(password),
-      hasLowercase: /[a-z]/.test(password),
-      hasNumber: /\d/.test(password),
-      isValid: false
-    };
-    
-    strength.isValid = strength.hasMinLength && strength.hasUppercase && 
-                      strength.hasLowercase && strength.hasNumber;
-    
-    setPasswordStrength(strength);
+    setFormData({ ...formData, [e.target.id]: e.target.value });
   };
 
   const handleRoleChange = (value: string) => {
     setFormData({ ...formData, role: value });
   };
 
-  const validateForm = () => {
-    const errors: {[key: string]: string} = {};
-    
-    // Full name validation
-    if (!formData.full_name.trim()) {
-      errors.full_name = "Full name is required";
-    } else if (formData.full_name.trim().length < 2) {
-      errors.full_name = "Full name must be at least 2 characters";
-    }
-    
-    // Email validation
-    if (!formData.email) {
-      errors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      errors.email = "Please enter a valid email address";
-    }
-    
-    // Password validation
-    if (!formData.password) {
-      errors.password = "Password is required";
-    } else if (!passwordStrength.isValid) {
-      errors.password = "Password does not meet strength requirements";
-    }
-    
-    // Confirm password validation
-    if (!formData.confirmPassword) {
-      errors.confirmPassword = "Please confirm your password";
-    } else if (formData.password !== formData.confirmPassword) {
-      errors.confirmPassword = "Passwords do not match";
-    }
-    
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
-    
-    // Validate form
-    if (!validateForm()) {
-      return;
-    }
-    
     setLoading(true);
 
     const { full_name, email, password, confirmPassword, role } = formData;
+
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
+      setErrorMsg("Passwords do not match");
+      setLoading(false);
+      return;
+    }
 
     try {
       const res = await fetch(URLS.API.AUTH.REGISTER, {
@@ -135,11 +63,6 @@ export default function Register() {
 
       if (!res.ok) throw new Error(data.message || "Registration failed");
 
-      // Validate response data
-      if (!data.data?.user || !data.data?.token) {
-        throw new Error("Invalid response from server");
-      }
-
       login(data.data.user, data.data.token);
 
       toast.success("Registration successful!");
@@ -151,50 +74,6 @@ export default function Register() {
       setLoading(false);
     }
   };
-
-  const PasswordStrengthIndicator = ({ strength }: { strength: typeof passwordStrength }) => (
-    <div className="space-y-2">
-      <p className="text-sm font-medium">Password Requirements:</p>
-      <div className="space-y-1">
-        <div className="flex items-center space-x-2 text-xs">
-          {strength.hasMinLength ? 
-            <CheckCircle className="h-3 w-3 text-green-500" /> : 
-            <XCircle className="h-3 w-3 text-red-500" />
-          }
-          <span className={strength.hasMinLength ? "text-green-600" : "text-red-600"}>
-            At least 8 characters
-          </span>
-        </div>
-        <div className="flex items-center space-x-2 text-xs">
-          {strength.hasUppercase ? 
-            <CheckCircle className="h-3 w-3 text-green-500" /> : 
-            <XCircle className="h-3 w-3 text-red-500" />
-          }
-          <span className={strength.hasUppercase ? "text-green-600" : "text-red-600"}>
-            One uppercase letter
-          </span>
-        </div>
-        <div className="flex items-center space-x-2 text-xs">
-          {strength.hasLowercase ? 
-            <CheckCircle className="h-3 w-3 text-green-500" /> : 
-            <XCircle className="h-3 w-3 text-red-500" />
-          }
-          <span className={strength.hasLowercase ? "text-green-600" : "text-red-600"}>
-            One lowercase letter
-          </span>
-        </div>
-        <div className="flex items-center space-x-2 text-xs">
-          {strength.hasNumber ? 
-            <CheckCircle className="h-3 w-3 text-green-500" /> : 
-            <XCircle className="h-3 w-3 text-red-500" />
-          }
-          <span className={strength.hasNumber ? "text-green-600" : "text-red-600"}>
-            One number
-          </span>
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
@@ -212,40 +91,15 @@ export default function Register() {
             <p className="text-center text-muted-foreground">Join thousands of learners worldwide</p>
           </CardHeader>
           <CardContent>
-            {errorMsg && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertDescription>{errorMsg}</AlertDescription>
-              </Alert>
-            )}
-            
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="full_name">Full Name</Label>
-                <Input 
-                  id="full_name" 
-                  value={formData.full_name} 
-                  onChange={handleChange} 
-                  className={validationErrors.full_name ? "border-destructive" : ""}
-                  required 
-                />
-                {validationErrors.full_name && (
-                  <p className="text-sm text-destructive">{validationErrors.full_name}</p>
-                )}
+                <Input id="full_name" value={formData.full_name} onChange={handleChange} required />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input 
-                  id="email" 
-                  type="email" 
-                  value={formData.email} 
-                  onChange={handleChange} 
-                  className={validationErrors.email ? "border-destructive" : ""}
-                  required 
-                />
-                {validationErrors.email && (
-                  <p className="text-sm text-destructive">{validationErrors.email}</p>
-                )}
+                <Input id="email" type="email" value={formData.email} onChange={handleChange} required />
               </div>
 
               <div className="space-y-2">
@@ -263,57 +117,12 @@ export default function Register() {
 
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Input 
-                    id="password" 
-                    type={showPassword ? "text" : "password"} 
-                    value={formData.password} 
-                    onChange={handleChange} 
-                    className={validationErrors.password ? "border-destructive" : ""}
-                    required 
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-                {validationErrors.password && (
-                  <p className="text-sm text-destructive">{validationErrors.password}</p>
-                )}
-                {formData.password && (
-                  <PasswordStrengthIndicator strength={passwordStrength} />
-                )}
+                <Input id="password" type="password" value={formData.password} onChange={handleChange} required />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <div className="relative">
-                  <Input 
-                    id="confirmPassword" 
-                    type={showConfirmPassword ? "text" : "password"} 
-                    value={formData.confirmPassword} 
-                    onChange={handleChange} 
-                    className={validationErrors.confirmPassword ? "border-destructive" : ""}
-                    required 
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  >
-                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-                {validationErrors.confirmPassword && (
-                  <p className="text-sm text-destructive">{validationErrors.confirmPassword}</p>
-                )}
+                <Input id="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleChange} required />
               </div>
 
               <div className="flex items-center space-x-2">
@@ -326,11 +135,9 @@ export default function Register() {
                 </Label>
               </div>
 
-              <Button 
-                type="submit" 
-                className="w-full" 
-                disabled={loading || !passwordStrength.isValid}
-              >
+              {errorMsg && <p className="text-sm text-red-500">{errorMsg}</p>}
+
+              <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Creating..." : "Create Account"}
               </Button>
 

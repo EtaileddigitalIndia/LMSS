@@ -6,7 +6,6 @@ import {
   ApiResponse,
 } from "@/config/api";
 import { ENV } from "@/config/environment";
-import { toast } from "sonner";
 
 // API Service Class
 class ApiService {
@@ -27,25 +26,6 @@ class ApiService {
     return localStorage.getItem(ENV.JWT_STORAGE_KEY);
   }
 
-  // Check if token is expired
-  private isTokenExpired(token: string): boolean {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      return Date.now() >= payload.exp * 1000;
-    } catch {
-      return true;
-    }
-  }
-
-  // Handle authentication errors
-  private handleAuthError() {
-    localStorage.removeItem(ENV.JWT_STORAGE_KEY);
-    localStorage.removeItem(ENV.USER_STORAGE_KEY);
-    window.dispatchEvent(new Event('storage'));
-    toast.error("Session expired. Please log in again.");
-    window.location.href = '/login';
-  }
-
   // Create full URL
   private createURL(endpoint: string): string {
     return `${this.baseURL}${endpoint}`;
@@ -53,31 +33,14 @@ class ApiService {
 
   // Handle API response
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
-    // Handle authentication errors
-    if (response.status === 401) {
-      this.handleAuthError();
-      throw new Error('Authentication required');
-    }
-    
     const contentType = response.headers.get("content-type");
 
     if (contentType && contentType.includes("application/json")) {
       const data = await response.json();
-      
-      // Handle API errors
-      if (!response.ok) {
-        throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
-      }
-      
       return data;
     }
 
     const text = await response.text();
-    
-    if (!response.ok) {
-      throw new Error(text || `HTTP ${response.status}: ${response.statusText}`);
-    }
-    
     return {
       success: response.ok,
       message: text,
@@ -94,11 +57,6 @@ class ApiService {
       const response = await requestFn();
       return await this.handleResponse<T>(response);
     } catch (error) {
-      // Don't retry authentication errors
-      if (error.message === 'Authentication required') {
-        throw error;
-      }
-      
       if (attempt < this.retryAttempts) {
         await new Promise((resolve) => setTimeout(resolve, this.retryDelay));
         return this.retryRequest<T>(requestFn, attempt + 1);
@@ -113,13 +71,6 @@ class ApiService {
     options: RequestInit = {},
   ): Promise<ApiResponse<T>> {
     const token = this.getToken();
-    
-    // Check token expiration
-    if (token && this.isTokenExpired(token)) {
-      this.handleAuthError();
-      throw new Error('Token expired');
-    }
-    
     const headers = getAuthHeaders(token);
 
     const config: RequestInit = {
@@ -177,13 +128,6 @@ class ApiService {
     onProgress?: (progress: number) => void,
   ): Promise<ApiResponse<T>> {
     const token = this.getToken();
-    
-    // Check token expiration
-    if (token && this.isTokenExpired(token)) {
-      this.handleAuthError();
-      throw new Error('Token expired');
-    }
-    
     const formData = new FormData();
     formData.append("file", file);
 
@@ -215,9 +159,6 @@ class ApiService {
               data: xhr.responseText as T,
             });
           }
-        } else if (xhr.status === 401) {
-          this.handleAuthError();
-          reject(new Error('Authentication required'));
         } else {
           reject(new Error(`Upload failed: ${xhr.status}`));
         }

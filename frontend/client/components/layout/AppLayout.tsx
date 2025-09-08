@@ -15,7 +15,6 @@ import {
   LogOut,
   Users as UsersIcon,
   LayoutList,
-  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/AuthContext";
 import axios from "axios";
@@ -29,7 +28,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const location = useLocation();
-  const { user, logout, isLoading } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -54,13 +53,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
   }, []);
 
   const navigation = (() => {
-    if (isLoading) {
-      return [
-        { name: "Home", href: "/", icon: BookOpen },
-        { name: "Courses", href: "/courses", icon: GraduationCap },
-      ];
-    }
-    
     if (!user) {
       return [
         { name: "Home", href: "/", icon: BookOpen },
@@ -110,11 +102,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   useEffect(() => {
     const fetchNotifications = async () => {
-      if (isLoading || !user) return;
-      
       try {
         const token = localStorage.getItem("token");
-        if (!token) return;
+        if (!token) {
+          // Don't fetch notifications if user is not logged in
+          return;
+        }
         
         const res = await axios.get(URLS.API.NOTIFICATIONS.LIST, {
           headers: { Authorization: `Bearer ${token}` },
@@ -122,11 +115,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
         setNotifications(res.data.notifications || []);
       } catch (err) {
         console.error("Failed to load notifications", err);
+        // Don't show error toast for notifications - it's not critical
       }
     };
 
     fetchNotifications();
-  }, [user, isLoading]);
+  }, []);
 
   const handleDeleteNotification = async (id: string) => {
     try {
@@ -141,18 +135,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
       console.error(err);
     }
   };
-
-  // Show loading state
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex items-center space-x-2">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span>Loading...</span>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -195,75 +177,73 @@ export default function AppLayout({ children }: AppLayoutProps) {
               <div className="relative">{/* Optional search */}</div>
             </div>
 
-            {user && (
-              <div className="relative">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="relative"
-                  onClick={() => setShowNotifications(!showNotifications)}
-                >
-                  <Bell className="h-4 w-4" />
-                  {notifications.length > 0 && (
-                    <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-primary text-[10px] font-medium text-white flex items-center justify-center">
-                      {notifications.length}
-                    </span>
-                  )}
-                </Button>
-
-                {showNotifications && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white border rounded shadow z-50 max-h-96 overflow-y-auto">
-                    <div className="p-4 border-b font-semibold">
-                      Notifications
-                    </div>
-
-                    {notifications.length === 0 ? (
-                      <div className="p-4 text-sm text-muted-foreground">
-                        No notifications available.
-                      </div>
-                    ) : (
-                      notifications.map((n) => (
-                        <div
-                          key={n._id}
-                          className="p-3 border-b space-y-1 text-sm"
-                        >
-                          <div className="font-medium">{n.title}</div>
-                          <div className="text-muted-foreground">{n.message}</div>
-                          {n.createdBy?.full_name && (
-                            <div className="text-xs text-muted-foreground italic">
-                              Posted by: {n.createdBy.full_name}
-                            </div>
-                          )}
-
-                          {(user?.role === "admin" ||
-                            user?.role === "instructor") && (
-                            <button
-                              onClick={() => handleDeleteNotification(n._id)}
-                              className="text-xs text-red-600 hover:underline"
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                      ))
-                    )}
-
-                    {/* Manage Notifications Button */}
-                    {(user?.role === "admin" || user?.role === "instructor") && (
-                      <div className="p-3 border-t text-right">
-                        <Link
-                          to="/notifications"
-                          className="text-sm text-primary font-medium hover:underline"
-                          onClick={() => setShowNotifications(false)}
-                        >
-                          Manage Notifications →
-                        </Link>
-                      </div>
-                    )}
-                  </div>
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative"
+                onClick={() => setShowNotifications(!showNotifications)}
+              >
+                <Bell className="h-4 w-4" />
+                {notifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-primary text-[10px] font-medium text-white flex items-center justify-center">
+                    {notifications.length}
+                  </span>
                 )}
-              </div>
-            )}
+              </Button>
+
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white border rounded shadow z-50 max-h-96 overflow-y-auto">
+                  <div className="p-4 border-b font-semibold">
+                    Notifications
+                  </div>
+
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-sm text-muted-foreground">
+                      No notifications available.
+                    </div>
+                  ) : (
+                    notifications.map((n) => (
+                      <div
+                        key={n._id}
+                        className="p-3 border-b space-y-1 text-sm"
+                      >
+                        <div className="font-medium">{n.title}</div>
+                        <div className="text-muted-foreground">{n.message}</div>
+                        {n.createdBy?.full_name && (
+                          <div className="text-xs text-muted-foreground italic">
+                            Posted by: {n.createdBy.full_name}
+                          </div>
+                        )}
+
+                        {(user?.role === "admin" ||
+                          user?.role === "instructor") && (
+                          <button
+                            onClick={() => handleDeleteNotification(n._id)}
+                            className="text-xs text-red-600 hover:underline"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+
+                  {/* Manage Notifications Button */}
+                  {(user?.role === "admin" || user?.role === "instructor") && (
+                    <div className="p-3 border-t text-right">
+                      <Link
+                        to="/notifications"
+                        className="text-sm text-primary font-medium hover:underline"
+                        onClick={() => setShowNotifications(false)}
+                      >
+                        Manage Notifications →
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {user ? (
               <div className="relative" ref={dropdownRef}>
@@ -277,10 +257,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
                 {dropdownOpen && (
                   <div className="absolute right-0 mt-2 w-40 bg-white border rounded shadow z-50">
-                    <div className="px-4 py-2 border-b">
-                      <p className="text-sm font-medium">{user.full_name}</p>
-                      <p className="text-xs text-muted-foreground">{user.email}</p>
-                    </div>
                     <Link
                       to="/profile"
                       className="block px-4 py-2 text-sm hover:bg-gray-100"

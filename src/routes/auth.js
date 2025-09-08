@@ -3,14 +3,13 @@ const jwt = require('jsonwebtoken');
 const Joi = require('joi');
 const User = require('../models/User');
 const { authenticateToken } = require('../middleware/auth');
-const { uploadAvatar, processUploadedFile, handleUploadError } = require('../middleware/upload');
 
 const router = express.Router();
 
 // Validation schemas
 const loginSchema = Joi.object({
   email: Joi.string().email().required(),
-  password: Joi.string().min(8).required()
+  password: Joi.string().min(6).required()
 });
 
 const registerSchema = Joi.object({
@@ -18,11 +17,6 @@ const registerSchema = Joi.object({
   password: Joi.string().min(8).required(),
   full_name: Joi.string().min(2).max(100).required(),
   role: Joi.string().valid('student', 'instructor', 'parent', 'admin').required()
-});
-
-const changePasswordSchema = Joi.object({
-  current_password: Joi.string().required(),
-  new_password: Joi.string().min(8).required()
 });
 
 // Login route
@@ -40,7 +34,7 @@ router.post('/login', async (req, res) => {
     const { email, password } = value;
 
     // Find user by email
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    const user = await User.findOne({ email: email.toLowerCase() });
 
     if (!user) {
       return res.status(401).json({
@@ -81,15 +75,11 @@ router.post('/login', async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
-    // Remove password from response
-    const userResponse = user.toJSON();
-    delete userResponse.password;
-
     res.json({
       success: true,
       message: 'Login successful',
       data: {
-        user: userResponse,
+        user: user.toJSON(),
         token,
         expires_in: process.env.JWT_EXPIRES_IN || '7d'
       }
@@ -99,8 +89,7 @@ router.post('/login', async (req, res) => {
     console.error('Login error:', error);
     res.status(500).json({
       success: false,
-      message: 'Login failed',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: 'Login failed'
     });
   }
 });
@@ -119,23 +108,6 @@ router.post('/register', async (req, res) => {
 
     const { email, password, full_name, role } = value;
 
-    // Additional password validation
-    if (password.length < 8) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must be at least 8 characters long'
-      });
-    }
-
-    // Check password strength
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/;
-    if (!passwordRegex.test(password)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number'
-      });
-    }
-
     // Check if user already exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
 
@@ -152,8 +124,7 @@ router.post('/register', async (req, res) => {
       password,
       full_name,
       role,
-      is_active: true,
-      email_verified: false
+      is_active: true
     });
 
     await user.save();
@@ -169,15 +140,11 @@ router.post('/register', async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
-    // Remove password from response
-    const userResponse = user.toJSON();
-    delete userResponse.password;
-
     res.status(201).json({
       success: true,
       message: 'Registration successful',
       data: {
-        user: userResponse,
+        user: user.toJSON(),
         token,
         expires_in: process.env.JWT_EXPIRES_IN || '7d'
       }
@@ -185,19 +152,9 @@ router.post('/register', async (req, res) => {
 
   } catch (error) {
     console.error('Registration error:', error);
-    
-    // Handle duplicate key error
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: 'User with this email already exists'
-      });
-    }
-
     res.status(500).json({
       success: false,
-      message: 'Registration failed',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: 'Registration failed'
     });
   }
 });
@@ -229,9 +186,9 @@ router.get('/me', authenticateToken, async (req, res) => {
 });
 
 // Update user profile
-router.put('/profile', authenticateToken, uploadAvatar, processUploadedFile, handleUploadError, async (req, res) => {
+router.put('/profile', authenticateToken, async (req, res) => {
   try {
-    const { full_name, bio } = req.body;
+    const { full_name, profile } = req.body;
 
     const user = await User.findById(req.user._id);
     if (!user) {
@@ -243,11 +200,7 @@ router.put('/profile', authenticateToken, uploadAvatar, processUploadedFile, han
 
     // Update fields
     if (full_name) user.full_name = full_name;
-    if (bio) {
-      if (!user.profile) user.profile = {};
-      user.profile.bio = bio;
-    }
-    if (req.file) user.avatar_url = req.file.url;
+    if (profile) user.profile = { ...user.profile, ...profile };
 
     await user.save();
 
@@ -269,27 +222,16 @@ router.put('/profile', authenticateToken, uploadAvatar, processUploadedFile, han
 // Change password
 router.put('/change-password', authenticateToken, async (req, res) => {
   try {
-    // Validate input
-    const { error, value } = changePasswordSchema.validate(req.body);
-    if (error) {
+    const { current_password, new_password } = req.body;
+
+    if (!current_password || !new_password) {
       return res.status(400).json({
         success: false,
-        message: error.details[0].message
+        message: 'Both current and new passwords are required',
       });
     }
 
-    const { current_password, new_password } = value;
-
-    // Additional password validation
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/;
-    if (!passwordRegex.test(new_password)) {
-      return res.status(400).json({
-        success: false,
-        message: 'New password must contain at least one uppercase letter, one lowercase letter, and one number'
-      });
-    }
-
-    const user = await User.findById(req.user._id).select('+password');
+    const user = await User.findById(req.user.id || req.user._id);
 
     if (!user) {
       return res.status(404).json({
@@ -327,6 +269,8 @@ router.put('/change-password', authenticateToken, async (req, res) => {
 // Logout route
 router.post('/logout', authenticateToken, async (req, res) => {
   try {
+    // In a real application, you might want to blacklist the token
+    // For now, we'll just return a success response
     res.json({
       success: true,
       message: 'Logout successful'
@@ -357,7 +301,6 @@ router.post('/refresh', authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Token refreshed successfully',
       data: {
         token,
         expires_in: process.env.JWT_EXPIRES_IN || '7d'
