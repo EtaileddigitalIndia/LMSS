@@ -59,6 +59,7 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:8080",
   "http://localhost:5173",
+  "http://localhost:3001",
   process.env.FRONTEND_URL,
   "https://eduflowstudentportal.netlify.app",
   "https://global-lms-frontend.netlify.app",
@@ -102,6 +103,12 @@ app.use(
         if (process.env.NODE_ENV === 'development') {
           console.log("✅ Allowing request from:", origin);
         }
+        return callback(null, true);
+      }
+
+      // In development, be more permissive with localhost origins
+      if (process.env.NODE_ENV === 'development' && origin.includes('localhost')) {
+        console.log("✅ Allowing localhost request from:", origin);
         return callback(null, true);
       }
 
