@@ -1,11 +1,27 @@
 const mongoose = require("mongoose");
+const { MongoMemoryServer } = require("mongodb-memory-server");
+
+let mongod;
 
 const connectDB = async () => {
   try {
-    const mongoURI =
-      process.env.NODE_ENV === "production"
-        ? process.env.MONGODB_URI_PROD
-        : process.env.MONGODB_URI;
+    let mongoURI;
+    
+    if (process.env.NODE_ENV === "production") {
+      mongoURI = process.env.MONGODB_URI_PROD;
+    } else if (process.env.MONGODB_URI && process.env.MONGODB_URI !== "mongodb://localhost:27017/global_lms") {
+      mongoURI = process.env.MONGODB_URI;
+    } else {
+      // Use in-memory MongoDB for development when local MongoDB is not available
+      console.log("🔄 Starting in-memory MongoDB for development...");
+      mongod = await MongoMemoryServer.create({
+        instance: {
+          dbName: 'global_lms'
+        }
+      });
+      mongoURI = mongod.getUri();
+      console.log("✅ In-memory MongoDB started");
+    }
 
     if (!mongoURI) {
       throw new Error("MongoDB URI is not defined in environment variables");
@@ -52,6 +68,10 @@ const connectDB = async () => {
         process.on("SIGINT", async () => {
           console.log("🛑 Shutting down gracefully...");
           await mongoose.connection.close();
+          if (mongod) {
+            await mongod.stop();
+            console.log("✅ In-memory MongoDB stopped");
+          }
           console.log("✅ MongoDB connection closed through app termination");
           process.exit(0);
         });
@@ -59,6 +79,10 @@ const connectDB = async () => {
         process.on("SIGTERM", async () => {
           console.log("🛑 Received SIGTERM, shutting down gracefully...");
           await mongoose.connection.close();
+          if (mongod) {
+            await mongod.stop();
+            console.log("✅ In-memory MongoDB stopped");
+          }
           console.log("✅ MongoDB connection closed through app termination");
           process.exit(0);
         });

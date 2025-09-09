@@ -45,6 +45,7 @@
     "nodemailer": "^6.10.1"
   },
   "devDependencies": {
+    "mongodb-memory-server": "^10.2.0",
     "nodemon": "^3.1.10"
   }
 }
