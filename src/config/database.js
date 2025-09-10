@@ -17,6 +17,10 @@ const connectDB = async () => {
       mongod = await MongoMemoryServer.create({
         instance: {
           dbName: 'global_lms'
+        },
+        binary: {
+          downloadTimeout: 180000, // 3 minutes timeout
+          version: '6.0.4' // Use a more stable version
         }
       });
       mongoURI = mongod.getUri();
